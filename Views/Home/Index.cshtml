@@ -1,0 +1,459 @@
+@model DashboardViewModel
+@using Microsoft.AspNetCore.Html
+@using System.Globalization
+@{
+    ViewData["Title"] = "Dashboard";
+    var hour = DateTime.Now.Hour;
+    var greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    var fullName = Access.User?.FullName ?? ""; var first = fullName.StartsWith("System ") ? fullName : fullName.Split(' ')[0];
+    var T = Model.Today;
+    var inv = CultureInfo.InvariantCulture;
+
+    // One colour per factory (reference palette slots), stable even when other factories are switched off.
+    var fcol = new[] { "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4" };
+    string Col(int factoryId) { var i = Model.AllFactories.FindIndex(x => x.Id == factoryId); return fcol[(i < 0 ? 0 : i) % fcol.Length]; }
+
+    // One colour per measure, used the same way in the tiles, the scoreboard and the chart.
+    const string cBudget = "#f59e0b", cAlloc = "#3b82f6", cPresent = "#10b981";
+    const string iBudget = "#b45309", iAlloc = "#1d4ed8", iPresent = "#047857";   // darker shades for text
+
+    HtmlString Delta(double cur, double? prev, bool? goodUp, string unit = "", int dec = 0, bool withLabel = true)
+    {
+        if (prev == null) return new HtmlString("<span class=\"dl flat\"><i class=\"bi bi-dash\"></i>no earlier period</span>");
+        var d = Math.Round(cur - prev.Value, dec);
+        var tail = withLabel ? $" vs {System.Net.WebUtility.HtmlEncode(Model.PrevLabel)}" : "";
+        if (d == 0) return new HtmlString($"<span class=\"dl flat\"><i class=\"bi bi-dash\"></i>no change{tail}</span>");
+        var up = d > 0;
+        var cls = goodUp == null ? "flat" : (up == goodUp.Value ? "good" : "bad");
+        return new HtmlString($"<span class=\"dl {cls}\"><i class=\"bi bi-{(up ? "arrow-up-right" : "arrow-down-right")}\"></i>{(up ? "+" : "−")}{Math.Abs(d).ToString(dec == 0 ? "N0" : "N" + dec, inv)}{unit}{tail}</span>");
+    }
+
+    // Heat-map colour = how much of the budget is filled (rounded, as shown in the box):
+    // over 100% grey | 75-100% green | 50-75% yellow | 25-50% orange | 25% or less red.
+    // People allocated where there is no budget at all get their own colour (purple).
+    string HeatStyle(Totals c)
+    {
+        if (c.Budget == 0 && c.Allocated == 0) return "";
+        if (c.Budget == 0) return "background:#c4b5fd;color:#2e1065";
+        var pct = Math.Round(c.Allocated * 100.0 / c.Budget);
+        var (bg, fg) = pct > 100 ? ("#cbd5e1", "#1e293b")
+                     : pct >= 75 ? ("#22c55e", "#052e16")
+                     : pct >= 50 ? ("#facc15", "#422006")
+                     : pct > 25 ? ("#fb923c", "#431407")
+                     : ("#ef4444", "#ffffff");
+        return $"background:{bg};color:{fg}";
+    }    string HeatTip(string who, Totals c) => $"{who}: {c.Allocated:N0} allocated of {c.Budget:N0} budget ({c.Fulfilment:0}%), {c.Absent:N0} absent, {(c.Shortage < 0 ? "short" : "surplus")} {Math.Abs(c.Shortage):N0}";
+    string Pct(double v) => v.ToString("0", inv) + "%";
+    string avg = Model.IsAverage ? " (avg/day)" : "";
+
+    var chartJson = Model.HasData && !Model.PeriodEmpty ? System.Text.Json.JsonSerializer.Serialize(new
+    {
+        labels = Model.Trend.Select(p => p.Label),
+        unit = Model.TrendUnit,
+        factories = Model.Factories.Select(f => new
+        {
+            name = f.Name, color = Col(f.Id),
+            budget = f.T.Budget, allocated = f.T.Allocated, present = f.T.Present,
+            fulfil = f.History.Select(h => Math.Round(h.Fulfilment, 1))
+        })
+    }) : "{}";
+}
+
+<div class="hello dash-hello mb-3">
+    <div>
+        <h2>@greet, @first</h2>
+        <p>@(Model.ShowData && Model.HasData ? $"Factory comparison · {Model.PeriodTitle}" : "Welcome to the Cadre Management workspace. Use the menu to open the screens you have access to.")
+           @if (Model.ShowData && Model.IsAverage) { <span class="hello-tag">Average per day &middot; @Model.DaysCount days with data</span> }</p>
+    </div>
+    <div class="hello-actions">
+        @if (Access.CanView("Entry")) { <a class="hbtn" asp-controller="Entry" asp-action="Index"><i class="bi bi-pencil-square"></i> Daily entry</a> }
+        @if (Access.CanView("Report")) { <a class="hbtn" asp-controller="Report" asp-action="Index"><i class="bi bi-bar-chart-line"></i> Report</a> }
+    </div>
+</div>
+
+@if (Model.ShowData && !Model.HasData)
+{
+    <div class="card-x text-center py-5">
+        <div class="fs-1 text-muted"><i class="bi bi-bar-chart-line"></i></div>
+        <h5 class="mt-2">No cadre data yet</h5>
+        <p class="text-muted">Enter the first day or import your Excel workbook, and the factory comparison will appear here.</p>
+        @if (Access.CanEdit("Entry")) { <a class="btn btn-primary" asp-controller="Entry" asp-action="Import"><i class="bi bi-file-earmark-excel me-1"></i>Import Excel</a> }
+    </div>
+}
+else if (Model.ShowData)
+{
+    @* ============ filter bar: period + factories ============ *@
+    <form method="get" id="filters" class="filters card-x mb-4">
+        <div class="f-group">
+            <span class="f-label">Period</span>
+            <div class="seg" id="modeSeg">
+                @foreach (var (val, lab) in new[] { ("day", "Day"), ("range", "Date range"), ("month", "Month"), ("year", "Year") })
+                {
+                    <label><input type="radio" name="mode" value="@val" checked="@(Model.Mode == val)" /><span>@lab</span></label>
+                }
+            </div>
+        </div>
+
+        <div class="f-group" data-mode="day">
+            @if (Model.PrevQuery != null && Model.Mode == "day") { <a class="f-nav" href="?@Model.PrevQuery" title="Previous day with data"><i class="bi bi-chevron-left"></i></a> }
+            <input type="date" name="date" value="@Model.End.ToString("yyyy-MM-dd")" min="@Model.Dates[^1].ToString("yyyy-MM-dd")" max="@Model.Dates[0].ToString("yyyy-MM-dd")" class="form-control form-control-sm" />
+            @if (Model.NextQuery != null && Model.Mode == "day") { <a class="f-nav" href="?@Model.NextQuery" title="Next day with data"><i class="bi bi-chevron-right"></i></a> }
+        </div>
+        <div class="f-group" data-mode="range">
+            <input type="date" name="from" value="@Model.Start.ToString("yyyy-MM-dd")" class="form-control form-control-sm" aria-label="From" />
+            <span class="text-muted">to</span>
+            <input type="date" name="to" value="@Model.End.ToString("yyyy-MM-dd")" class="form-control form-control-sm" aria-label="To" />
+        </div>
+        <div class="f-group" data-mode="month">
+            @if (Model.PrevQuery != null && Model.Mode == "month") { <a class="f-nav" href="?@Model.PrevQuery" title="Previous month"><i class="bi bi-chevron-left"></i></a> }
+            <select name="month" class="form-select form-select-sm">
+                @foreach (var o in Model.MonthOptions) { <option value="@o.Value" selected="@(o.Value == (Model.Month == "" ? Model.Start.ToString("yyyy-MM") : Model.Month))">@o.Label</option> }
+            </select>
+            @if (Model.NextQuery != null && Model.Mode == "month") { <a class="f-nav" href="?@Model.NextQuery" title="Next month"><i class="bi bi-chevron-right"></i></a> }
+        </div>
+        <div class="f-group" data-mode="year">
+            @if (Model.PrevQuery != null && Model.Mode == "year") { <a class="f-nav" href="?@Model.PrevQuery" title="Previous year"><i class="bi bi-chevron-left"></i></a> }
+            <select name="year" class="form-select form-select-sm">
+                @foreach (var y in Model.YearOptions) { <option value="@y" selected="@(y == (Model.Year == 0 ? Model.Start.Year : Model.Year))">@y</option> }
+            </select>
+            @if (Model.NextQuery != null && Model.Mode == "year") { <a class="f-nav" href="?@Model.NextQuery" title="Next year"><i class="bi bi-chevron-right"></i></a> }
+        </div>
+
+        <div class="f-group f-factories">
+            <span class="f-label">Factories</span>
+            @foreach (var fac in Model.AllFactories)
+            {
+                <label class="fchip" style="--fc:@Col(fac.Id)" title="@fac.FullName">
+                    <input type="checkbox" name="f" value="@fac.Id" checked="@Model.SelectedIds.Contains(fac.Id)" /><span><i></i>@fac.Name</span>
+                </label>
+            }
+            <a href="#" class="f-link" id="allF">All</a>
+        </div>
+
+        <div class="f-group ms-auto">
+            <button class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply</button>
+            <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("Index", "Home")">Reset</a>
+            @if (!Model.PeriodEmpty)
+            {
+                <a class="btn btn-success btn-sm" title="Download exactly what is shown as an Excel workbook"
+                   href="@Url.Action("Export", "Home", new { mode = Model.Mode, date = Model.End.ToString("yyyy-MM-dd"), from = Model.Start.ToString("yyyy-MM-dd"), to = Model.End.ToString("yyyy-MM-dd"), month = Model.Month, year = Model.Year, f = Model.SelectedIds.ToArray() })"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Print, or choose Save as PDF" onclick="window.print()"><i class="bi bi-printer me-1"></i>Print / PDF</button>
+            }
+        </div>
+    </form>
+
+    if (Model.PeriodEmpty)
+    {
+        <div class="card-x text-center py-5">
+            <div class="fs-1 text-muted"><i class="bi bi-calendar-x"></i></div>
+            <h5 class="mt-2">No data in this period</h5>
+            <p class="text-muted mb-0">Pick another @(Model.Mode == "year" ? "year" : Model.Mode == "month" ? "month" : "date range"). Data exists from @Model.Dates[^1].ToString("dd MMM yyyy") to @Model.Dates[0].ToString("dd MMM yyyy").</p>
+        </div>
+    }
+    else
+    {
+    var P = Model.Prev;
+    // scoreboard rows: label, hint, value, number format, suffix, bar kind, row dot colour, value ink colour
+    var board = new (string Label, string Hint, Func<Totals, double> Get, string Fmt, string Suffix, string Bar, string Dot, string Ink)[]
+    {
+        ("Budget", "approved cadre", x => x.Budget, "N0", "", "", cBudget, iBudget),
+        ("Allocated", "cadre assigned", x => x.Allocated, "N0", "", "", cAlloc, iAlloc),
+        ("Present on floor", "allocated − absent", x => x.Present, "N0", "", "", cPresent, iPresent),
+        ("Shortage / surplus", "allocated − budget", x => x.Shortage, "+#,0;−#,0;0", "", "", "#f43f5e", ""),
+        ("Fulfilment", "allocated ÷ budget", x => x.Fulfilment, "0.0", "%", "fulfil", "#0d9488", ""),
+        ("On-floor rate", "present ÷ budget", x => x.OnFloor, "0.0", "%", "fulfil", "#34d399", ""),
+        ("Absenteeism", "absent ÷ allocated", x => x.AbsentPct, "0.0", "%", "absent", "#f59e0b", ""),
+    };
+
+    <div class="dash">
+        @if (!string.IsNullOrEmpty(Model.Notice)) { <div class="dash-note"><i class="bi bi-info-circle-fill"></i><span>@Model.Notice</span></div> }
+        @* ============ group strip: budget / allocated / present each have their own colour ============ *@
+        <div class="strip mb-4">
+            <div class="strip-i" style="--a:#0d9488"><span class="si"><i class="bi bi-bullseye"></i></span><div><label>Fulfilment</label><b data-count="@Math.Round(T.Fulfilment)" data-suf="%">@Pct(T.Fulfilment)</b>@Delta(T.Fulfilment, P?.Fulfilment, true, " pts", 1)</div></div>
+            <div class="strip-i" style="--a:@cBudget"><span class="si"><i class="bi bi-clipboard-data"></i></span><div><label>@("Budget" + avg)</label><b style="color:@iBudget" data-count="@T.Budget">@T.Budget.ToString("N0")</b>@Delta(T.Budget, P?.Budget, null)</div></div>
+            <div class="strip-i" style="--a:@cAlloc"><span class="si"><i class="bi bi-people"></i></span><div><label>@("Allocated" + avg)</label><b style="color:@iAlloc" data-count="@T.Allocated">@T.Allocated.ToString("N0")</b>@Delta(T.Allocated, P?.Allocated, true)</div></div>
+            <div class="strip-i" style="--a:@cPresent"><span class="si"><i class="bi bi-person-check"></i></span><div><label>@("Present" + avg)</label><b style="color:@iPresent" data-count="@T.Present">@T.Present.ToString("N0")</b>@Delta(T.Present, P?.Present, true)</div></div>
+            <div class="strip-i" style="--a:#f43f5e"><span class="si"><i class="bi bi-@(T.Shortage < 0 ? "exclamation-triangle" : "check-circle")"></i></span><div><label>@(T.Shortage < 0 ? "Short by" : "Surplus")</label><b class="@(T.Shortage < 0 ? "neg-t" : "")" data-count="@Math.Abs(T.Shortage)">@Math.Abs(T.Shortage).ToString("N0")</b>@Delta(T.Shortage, P?.Shortage, true)</div></div>
+            <div class="strip-i" style="--a:#f59e0b"><span class="si"><i class="bi bi-person-x"></i></span><div><label>Absenteeism</label><b data-count="@T.AbsentPct.ToString("0.0", inv)" data-dec="1" data-suf="%">@T.AbsentPct.ToString("0.0", inv)%</b>@Delta(T.AbsentPct, P?.AbsentPct, false, " pts", 1)</div></div>
+        </div>
+
+        @* ============ the comparison scoreboard: factories side by side ============ *@
+        <div class="card-x flush mb-4">
+            <div class="p-3 pb-2"><div class="card-title-x mb-0" style="--a:#0d9488"><i class="bi bi-bar-chart-steps"></i> Factory scoreboard <small>@Model.PeriodTitle@(Model.IsAverage ? " · average per day" : "")</small></div></div>
+            <div style="overflow-x:auto">
+            <table class="score">
+                <colgroup><col class="c-lab" />@for (int i = 0; i < Model.Factories.Count + 1; i++) { <col /> }</colgroup>
+                <thead>
+                    <tr>
+                        <th></th>
+                        @foreach (var f in Model.Factories)
+                        {
+                            <th class="fh" style="--fc:@Col(f.Id)" title="@f.FullName"><span class="fn">@f.Name</span></th>
+                        }
+                        <th class="grp"><span class="fn">@(Model.AllSelected ? "Group" : "Selected")</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var row in board)
+                {
+                    <tr>
+                        <th scope="row"><span class="msw" style="background:@row.Dot"></span>@row.Label<small>@row.Hint</small></th>
+                        @foreach (var f in Model.Factories)
+                        {
+                            var v = row.Get(f.T);
+                            var neg = row.Label.StartsWith("Shortage") && v < 0;
+                            <td>
+                                <div class="cv"><b class="@(neg ? "neg-t" : "")" style="@(row.Ink != "" ? "color:" + row.Ink : "")">@v.ToString(row.Fmt, inv)@row.Suffix</b></div>
+                                @if (row.Bar == "fulfil") { <div class="sb"><span style="width:@((Math.Min(v, 120) / 1.2).ToString("0.#", inv))%"></span><i></i></div> }
+                                else if (row.Bar == "absent") { <div class="sb"><span class="ab" style="width:@(Math.Min(v / 20 * 100, 100).ToString("0.#", inv))%"></span></div> }
+                            </td>
+                        }
+                        <td class="grp"><div class="cv"><b class="@(row.Label.StartsWith("Shortage") && row.Get(T) < 0 ? "neg-t" : "")" style="@(row.Ink != "" ? "color:" + row.Ink : "")">@row.Get(T).ToString(row.Fmt, inv)@row.Suffix</b></div></td>
+                    </tr>
+                }
+                    <tr>
+                        <th scope="row"><span class="msw" style="background:#94a3b8"></span>Change vs @(string.IsNullOrEmpty(Model.PrevLabel) ? "earlier period" : Model.PrevLabel)<small>fulfilment, points</small></th>
+                        @foreach (var f in Model.Factories)
+                        {
+                            <td><div class="cv">@if (P != null && f.Prev.Budget > 0) { @Delta(f.T.Fulfilment, f.Prev.Fulfilment, true, " pts", 1, false) } else { <span class="dl flat">&ndash;</span> }</div></td>
+                        }
+                        <td class="grp"><div class="cv">@Delta(T.Fulfilment, P?.Fulfilment, true, " pts", 1, false)</div></td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+
+        @* ============ charts ============ *@
+        <div class="row g-3 mb-4">
+            <div class="col-xl-5">
+                <div class="card-x h-100">
+                    <div class="card-title-x" style="--a:#3b82f6"><i class="bi bi-bar-chart"></i> Budget vs allocated vs present @if (Model.IsAverage) { <small>average per day</small> }</div>
+                    <div class="trend-wrap"><canvas id="cmp" role="img" aria-label="Grouped column chart of budget, allocated and present cadre for each factory"></canvas></div>
+                </div>
+            </div>
+            <div class="col-xl-7">
+                <div class="card-x h-100">
+                    <div class="card-title-x" style="--a:#10b981"><i class="bi bi-graph-up"></i> Fulfilment trend by factory <small>% of budget @(Model.TrendUnit == "month" ? "by month, average per day" : "by day")@(Model.TrendNote != "" ? " \u00b7 " + Model.TrendNote : "")</small></div>
+                    <div class="trend-wrap"><canvas id="trend" role="img" aria-label="Line chart of fulfilment percentage for each factory"></canvas></div>
+                    <details class="mt-2 small">
+                        <summary class="text-muted">View as table</summary>
+                        <div style="max-height:230px;overflow:auto">
+                        <table class="mini-table mt-2">
+                            <thead><tr><th>@(Model.TrendUnit == "month" ? "Month" : "Date")</th>@foreach (var f in Model.Factories) { <th>@f.Name</th> }<th>@(Model.AllSelected ? "Group" : "Selected")</th></tr></thead>
+                            <tbody>
+                            @for (int r = Model.Trend.Count - 1; r >= 0; r--)
+                            {
+                                <tr><td>@Model.Trend[r].Label</td>@foreach (var f in Model.Factories) { <td>@f.History[r].Fulfilment.ToString("0.0", inv)%</td> }<td>@Model.Trend[r].T.Fulfilment.ToString("0.0", inv)%</td></tr>
+                            }
+                            </tbody>
+                        </table>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        @* ============ departments across factories (heat map) ============ *@
+        <div class="row g-3">
+            <div class="col-12">
+                <div class="card-x h-100">
+                    <div class="card-title-x" style="--a:#f59e0b"><i class="bi bi-grid-3x3-gap"></i> Department by factory <small>shortage vs budget@(Model.IsAverage ? ", average per day" : "")</small></div>
+                    <p class="heat-help">Each box compares the people allocated with the budget. The big number is how many people are <b>short (&minus;)</b> or <b>over (+)</b>; the small line is how much of the budget is filled. The colour shows how well it is filled &ndash; see the key below.</p>
+                    <div style="overflow-x:auto">
+                    <table class="heat">
+                        <thead><tr><th></th>@for (int i = 0; i < Model.Factories.Count; i++) { <th title="@Model.Factories[i].FullName"><span class="dot" style="background:@Col(Model.Factories[i].Id)"></span>@Model.Factories[i].Name</th> }<th>@(Model.AllSelected ? "Group" : "Selected")</th></tr></thead>
+                        <tbody>
+                        @foreach (var r in Model.Heat)
+                        {
+                            <tr>
+                                <th scope="row">@r.Department@if (r.Separate) { <span class="own">own total</span> }</th>
+                                @for (int i = 0; i < Model.Factories.Count; i++)
+                                {
+                                    var c = r.Cells[i];
+                                    if (c.Budget == 0 && c.Allocated == 0) { <td class="empty">&ndash;</td> }
+                                    else { <td style="@HeatStyle(c)" title="@HeatTip(Model.Factories[i].Name + " \u00b7 " + r.Department, c)"><b>@(c.Shortage > 0 ? "+" : "")@c.Shortage.ToString("N0")</b><small>@(c.Budget == 0 ? "no budget" : Pct(c.Fulfilment) + " filled")</small></td> }
+                                }
+                                <td style="@HeatStyle(r.Total)" title="@HeatTip("Total \u00b7 " + r.Department, r.Total)"><b>@(r.Total.Shortage > 0 ? "+" : "")@r.Total.Shortage.ToString("N0")</b><small>@(r.Total.Budget == 0 ? "no budget" : Pct(r.Total.Fulfilment) + " filled")</small></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="heat-legend"><b>Budget filled:</b><span class="lg" style="--c:#cbd5e1"></span>over 100%<span class="lg" style="--c:#22c55e"></span>75&ndash;100%<span class="lg" style="--c:#facc15"></span>50&ndash;75%<span class="lg" style="--c:#fb923c"></span>25&ndash;50%<span class="lg" style="--c:#ef4444"></span>25% or less<span class="lg" style="--c:#c4b5fd"></span>people but no budget<em>"&ndash;" = nothing in that department</em></div>
+                </div>
+            </div>
+        </div>
+        @* ============ where each factory hurts: ranked, one column per factory ============ *@
+        @{
+            var maxShort = Math.Max(1, Model.Factories.SelectMany(f => f.TopShort).Select(s => -s.T.Shortage).DefaultIfEmpty(1).Max());
+            var maxAbs = Math.Max(1, Model.Factories.SelectMany(f => f.TopAbsent).Select(s => s.T.AbsentPct).DefaultIfEmpty(1).Max());
+        }
+        <div class="row g-3 mt-0">
+            <div class="col-xl-6">
+                <div class="card-x flush h-100">
+                    <div class="p-3 pb-2"><div class="card-title-x mb-0" style="--a:#f43f5e"><i class="bi bi-exclamation-triangle"></i> Biggest shortages <small>top 3 sections per factory</small></div></div>
+                    <table class="rank">
+                        <thead><tr><th></th>@foreach (var f in Model.Factories) { <th class="fh" style="--fc:@Col(f.Id)" title="@f.FullName">@f.Name</th> }</tr></thead>
+                        <tbody>
+                        @for (int r = 0; r < 3; r++)
+                        {
+                            <tr><th>#@(r + 1)</th>
+                            @foreach (var f in Model.Factories)
+                            {
+                                if (r < f.TopShort.Count)
+                                {
+                                    var s = f.TopShort[r];
+                                    <td title="@s.Department"><div class="rk"><span class="rn">@s.Section</span><b class="neg-t">&minus;@Math.Abs(s.T.Shortage)</b></div><div class="rb"><span class="r1" style="width:@((-s.T.Shortage * 100.0 / maxShort).ToString("0.#", inv))%"></span></div></td>
+                                }
+                                else if (r == 0) { <td class="none"><i class="bi bi-check-circle"></i> none</td> }
+                                else { <td class="none">&ndash;</td> }
+                            }
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="card-x flush h-100">
+                    <div class="p-3 pb-2"><div class="card-title-x mb-0" style="--a:#f59e0b"><i class="bi bi-person-x"></i> Highest absenteeism <small>top 3 sections per factory, 10+ allocated</small></div></div>
+                    <table class="rank">
+                        <thead><tr><th></th>@foreach (var f in Model.Factories) { <th class="fh" style="--fc:@Col(f.Id)" title="@f.FullName">@f.Name</th> }</tr></thead>
+                        <tbody>
+                        @for (int r = 0; r < 3; r++)
+                        {
+                            <tr><th>#@(r + 1)</th>
+                            @foreach (var f in Model.Factories)
+                            {
+                                if (r < f.TopAbsent.Count)
+                                {
+                                    var s = f.TopAbsent[r];
+                                    <td title="@s.Department · @s.T.Absent of @s.T.Allocated absent"><div class="rk"><span class="rn">@s.Section</span><b class="warn-t">@s.T.AbsentPct.ToString("0")%</b></div><div class="rb"><span class="r2" style="width:@((s.T.AbsentPct * 100.0 / maxAbs).ToString("0.#", inv))%"></span></div></td>
+                                }
+                                else if (r == 0) { <td class="none"><i class="bi bi-check-circle"></i> none</td> }
+                                else { <td class="none">&ndash;</td> }
+                            }
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(Model.SeparateNote)) { <p class="text-muted small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>@Model.SeparateNote</p> }
+        <p class="text-muted small mt-1 mb-0">Fulfilment = allocated &divide; budget. Present = allocated &minus; absent. Shortage = allocated &minus; budget (negative means short).@(Model.IsAverage ? " Over a period, figures are the average per day across the days that have data." : "")</p>
+    </div>
+    }
+}
+
+@section Scripts {
+@if (Model.ShowData && Model.HasData)
+{
+    <script>
+        // ---- filter bar: show only the inputs that belong to the chosen period type
+        (function () {
+            const form = document.getElementById('filters'); if (!form) return;
+            const modes = form.querySelectorAll('input[name=mode]');
+            const sync = () => {
+                const m = form.querySelector('input[name=mode]:checked').value;
+                form.querySelectorAll('[data-mode]').forEach(g => {
+                    const on = g.dataset.mode === m; g.style.display = on ? '' : 'none';
+                    g.querySelectorAll('input,select').forEach(i => i.disabled = !on);   // only the active period's values are sent
+                });
+            };
+            modes.forEach(r => r.addEventListener('change', sync)); sync();
+            form.querySelectorAll('[data-mode] input[type=date][name=date], [data-mode] select').forEach(i => i.addEventListener('change', () => form.submit()));
+            form.querySelectorAll('input[name=f]').forEach(c => c.addEventListener('change', () => {
+                if (!form.querySelector('input[name=f]:checked')) c.checked = true;         // keep at least one factory
+                form.submit();
+            }));
+            document.getElementById('allF').addEventListener('click', e => { e.preventDefault(); form.querySelectorAll('input[name=f]').forEach(c => c.checked = true); form.submit(); });
+        })();
+    </script>
+}
+@if (Model.ShowData && Model.HasData && !Model.PeriodEmpty)
+{
+    <script src="~/lib/chartjs/chart.umd.min.js"></script>
+    <script>
+        const D = @Html.Raw(chartJson);
+        (function () {
+            const fail = id => { const c = document.getElementById(id); c.closest('.trend-wrap').innerHTML = '<p class="text-muted small">Chart library could not load (no internet?). The scoreboard and tables show the same numbers.</p>'; };
+            if (!window.Chart) { fail('cmp'); fail('trend'); return; }
+            const ink = '#0b0b0b', muted = '#64748b', grid = '#eef1f7', surface = '#ffffff';
+            const fmt = v => Number(v).toLocaleString();
+            const n = D.labels.length, last = n - 1;
+            const narrow = window.innerWidth < 760;   // phones / small tablets: full-width chart, no end labels
+
+            // ---- 1. grouped columns: budget / allocated / present, each measure keeps its own colour
+            const mc = { Budget: '@cBudget', Allocated: '@cAlloc', Present: '@cPresent' };
+            new Chart(document.getElementById('cmp'), {
+                type: 'bar',
+                data: {
+                    labels: D.factories.map(f => f.name),
+                    datasets: [
+                        { label: 'Budget', data: D.factories.map(f => f.budget), backgroundColor: mc.Budget },
+                        { label: 'Allocated', data: D.factories.map(f => f.allocated), backgroundColor: mc.Allocated },
+                        { label: 'Present', data: D.factories.map(f => f.present), backgroundColor: mc.Present }
+                    ].map(d => ({ ...d, borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom', maxBarThickness: 24, categoryPercentage: 0.7, barPercentage: 0.95 }))
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', align: 'start', labels: { color: ink, boxWidth: 12, boxHeight: 12, font: { size: 12 } } },
+                        tooltip: { backgroundColor: '#111827', padding: 10, cornerRadius: 10,
+                            callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmt(c.parsed.y),
+                                         footer: it => { const f = D.factories[it[0].dataIndex]; const s = f.allocated - f.budget; return (s < 0 ? 'Short by ' : 'Surplus ') + fmt(Math.abs(s)) + ' · ' + (f.budget ? (f.allocated * 100 / f.budget).toFixed(0) : 0) + '% fulfilled'; } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: muted, font: { size: 11 }, maxRotation: 0, autoSkip: false, callback: function (v) { const l = this.getLabelForValue(v); return l.length > 13 ? l.split(' ') : l; } }, border: { color: grid } },
+                        y: { beginAtZero: true, grid: { color: grid }, border: { display: false }, ticks: { color: muted, callback: v => v >= 1000 ? (v / 1000) + 'K' : v } }
+                    }
+                }
+            });
+
+            // ---- 2. fulfilment trend, one line per factory (needs at least two points to be a trend)
+            if (n < 2) { document.getElementById("trend").closest(".trend-wrap").innerHTML = '<div class="empty-chart"><i class="bi bi-graph-up"></i><div>The trend appears once there are at least two days of data.</div></div>'; return; }
+            const crosshair = { id: 'crosshair', afterDatasetsDraw(c) {
+                const a = c.tooltip && c.tooltip.getActiveElements && c.tooltip.getActiveElements();
+                if (!a || !a.length) return;
+                const x = a[0].element.x, y = c.scales.y;
+                c.ctx.save(); c.ctx.strokeStyle = '#cfd6e8'; c.ctx.lineWidth = 1;
+                c.ctx.beginPath(); c.ctx.moveTo(x, y.top); c.ctx.lineTo(x, y.bottom); c.ctx.stroke(); c.ctx.restore();
+            } };
+            const endLabels = { id: 'endLabels', afterDatasetsDraw(c) {
+                const { ctx } = c; ctx.save(); ctx.font = '600 11px Inter, system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                const pts = [];
+                c.data.datasets.forEach((ds, i) => { if (ds.isRef) return; const el = c.getDatasetMeta(i).data[last]; if (el) pts.push({ x: el.x, y: el.y, t: ds.label + '  ' + ds.data[last].toFixed(0) + '%', color: ds.borderColor }); });
+                pts.sort((a, b) => a.y - b.y);
+                for (let i = 1; i < pts.length; i++) if (pts[i].y - pts[i - 1].y < 14) pts[i].y = pts[i - 1].y + 14;
+                pts.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x + 8, p.y - 1, 10, 2); ctx.fillStyle = ink; ctx.fillText(p.t, p.x + 22, p.y); });
+                ctx.restore();
+            } };
+            const lines = D.factories.map(f => ({
+                label: f.name, data: f.fulfil, borderColor: f.color, backgroundColor: f.color, borderWidth: 2, tension: 0.25,
+                pointRadius: ctx => (ctx.dataIndex === last || n === 1) ? 4 : 0, pointHoverRadius: 5, pointBackgroundColor: f.color, pointBorderColor: surface, pointBorderWidth: 2
+            }));
+            lines.push({ label: '100% of budget', data: D.labels.map(() => 100), borderColor: '#9aa3b2', borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0, pointHoverRadius: 0, isRef: true });
+            new Chart(document.getElementById('trend'), {
+                type: 'line',
+                data: { labels: D.labels, datasets: lines },
+                options: {
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    layout: { padding: { right: (n > 1 && !narrow) ? 150 : 8, top: 6 } },
+                    plugins: {
+                        legend: { position: 'top', align: 'start', labels: { color: ink, usePointStyle: false, boxWidth: 22, boxHeight: 2, font: { size: 12 } } },
+                        tooltip: { backgroundColor: '#111827', padding: 10, cornerRadius: 10, filter: i => !i.dataset.isRef,
+                            callbacks: { label: c => ' ' + c.dataset.label + ': ' + c.parsed.y.toFixed(1) + '%' } }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: muted, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, border: { color: grid } },
+                        y: { grace: '6%', grid: { color: grid }, border: { display: false }, ticks: { color: muted, callback: v => v + '%' } }
+                    }
+                },
+                plugins: [crosshair, (n > 1 && !narrow) ? endLabels : {}]
+            });
+        })();
+    </script>
+}
+}

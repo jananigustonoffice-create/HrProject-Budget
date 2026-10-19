@@ -1,0 +1,31 @@
+@{ ViewData["Title"] = "Import Excel"; var result = ViewBag.Result as ImportResult; }
+<div class="page-head">
+    <div><h3>Import from Excel</h3><p>Loads every dated sheet of a Cadre Report workbook: budget, allocated and absent for each factory and section.</p></div>
+    <a class="btn btn-outline-secondary" asp-action="Index"><i class="bi bi-arrow-left me-1"></i>Back to entry</a>
+</div>
+
+@if (result != null)
+{
+    <div class="card-x mb-4">
+        <h5><i class="bi bi-check-circle text-success me-1"></i>Imported @result.Days day(s), @result.Rows rows</h5>
+        <p class="text-muted mb-0">@string.Join(", ", result.Dates)</p>
+        @if (result.Warnings.Count > 0)
+        {
+            <hr />
+            <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle text-warning me-1"></i>Needs attention</div>
+            <ul class="mb-0 small">@foreach (var w in result.Warnings) { <li>@w</li> }</ul>
+        }
+    </div>
+}
+
+<form method="post" enctype="multipart/form-data" asp-action="Import" class="card-x" style="max-width:620px">
+    <div class="mb-3">
+        <label class="form-label">Excel workbook (.xlsx)</label>
+        <input type="file" name="file" accept=".xlsx" class="form-control" required />
+    </div>
+    <ul class="text-muted small ps-3">
+        <li>Each sheet must have its date in cell <b>B3</b>.</li>
+        <li>Dates that already exist are <b>overwritten</b> with the workbook values.</li>
+    </ul>
+    <button class="btn btn-primary"><i class="bi bi-upload me-1"></i>Import</button>
+</form>

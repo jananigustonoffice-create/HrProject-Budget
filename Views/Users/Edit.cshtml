@@ -1,0 +1,81 @@
+@model UserEditModel
+@{ ViewData["Title"] = Model.Id == 0 ? "New user" : "Edit user"; }
+<div class="page-head"><div><h3>@(Model.Id == 0 ? "New user" : "Edit user")</h3><p>Admins have everything. Super users can view all screens. Users get only the screens you tick.</p></div></div>
+<form asp-action="Save" method="post">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger"></div>
+    <input type="hidden" asp-for="Id" />
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card-x">
+                <div class="mb-3"><label asp-for="FullName" class="form-label"></label><input asp-for="FullName" class="form-control" /><span asp-validation-for="FullName" class="text-danger small"></span></div>
+                <div class="mb-3"><label asp-for="Username" class="form-label"></label><input asp-for="Username" class="form-control" autocomplete="off" /><span asp-validation-for="Username" class="text-danger small"></span></div>
+                <div class="mb-3"><label asp-for="Password" class="form-label">@(Model.Id == 0 ? "Password" : "New password (leave blank to keep)")</label><input asp-for="Password" class="form-control" autocomplete="new-password" /><span asp-validation-for="Password" class="text-danger small"></span></div>
+                <div class="mb-3">
+                    <label asp-for="Role" class="form-label"></label>
+                    <select asp-for="Role" class="form-select" id="role">
+                        <option value="@Role.Admin">Admin - full privileges</option>
+                        <option value="@Role.SuperUser">Super User - view only, all screens</option>
+                        <option value="@Role.User">User - screen wise privileges</option>
+                    </select>
+                </div>
+                <div class="form-check form-switch"><input asp-for="IsActive" class="form-check-input" /><label asp-for="IsActive" class="form-check-label">Account active</label></div>
+            </div>
+            @{
+                var allFac = ViewBag.Factories as List<Factory> ?? new List<Factory>();
+                var fcols = new[] { "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4" };
+            }
+            <div class="card-x mt-3" id="facCard">
+                <h6 class="mb-1">Factory access</h6>
+                <p class="text-muted small mb-2">Which factories this user can see and work with. Admins always have every factory.</p>
+                <div class="form-check form-switch mb-2"><input asp-for="AllFactories" class="form-check-input" id="allFac" /><label asp-for="AllFactories" class="form-check-label">All factories</label></div>
+                <div id="facList" class="d-flex flex-wrap gap-2">
+                    @for (int i = 0; i < allFac.Count; i++)
+                    {
+                        <label class="fchip" style="--fc:@fcols[i % fcols.Length]" title="@allFac[i].FullName"><input type="checkbox" name="FactoryIds" value="@allFac[i].Id" checked="@Model.FactoryIds.Contains(allFac[i].Id)" /><span><i></i>@allFac[i].Name</span></label>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card-x flush" id="permCard">
+                <div class="p-3 pb-0"><h5 class="mb-1">Screen privileges</h5><p class="text-muted small mb-2">Applies to the <b>User</b> role. Edit includes view.</p></div>
+                <table class="table perm-grid align-middle">
+                    <thead><tr><th>Screen</th><th class="text-center">View</th><th class="text-center">Edit</th></tr></thead>
+                    <tbody>
+                    @for (int i = 0; i < Model.Perms.Count; i++)
+                    {
+                        <tr>
+                            <td>@Model.Perms[i].Label<input type="hidden" asp-for="Perms[i].Screen" /></td>
+                            <td class="text-center"><input asp-for="Perms[i].View" class="form-check-input perm-view" /></td>
+                            <td class="text-center"><input asp-for="Perms[i].Edit" class="form-check-input perm-edit" /></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="mt-4"><button class="btn btn-primary">Save user</button> <a class="btn btn-link" asp-action="Index">Cancel</a></div>
+</form>
+
+@section Scripts {
+<partial name="_ValidationScriptsPartial" />
+<script>
+    const role = document.getElementById('role'), card = document.getElementById('permCard');
+    const allFac = document.getElementById('allFac'), facCard = document.getElementById('facCard'), facList = document.getElementById('facList');
+    function sync() {
+        card.classList.toggle('perm-off', role.value !== 'User');
+        const admin = role.value === 'Admin';
+        if (admin) allFac.checked = true;
+        allFac.disabled = admin;
+        facList.classList.toggle('perm-off', allFac.checked);
+    }
+    allFac.addEventListener('change', sync);
+    role.addEventListener('change', sync); sync();
+    document.querySelectorAll('.perm-grid tbody tr').forEach(tr => {
+        const v = tr.querySelector('.perm-view'), e = tr.querySelector('.perm-edit');
+        e.addEventListener('change', () => { if (e.checked) v.checked = true; });
+        v.addEventListener('change', () => { if (!v.checked) e.checked = false; });
+    });
+</script>
+}

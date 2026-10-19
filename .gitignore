@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+
+# Local settings (may contain secrets) - keep the .example file
+appsettings.Local.json
+
+# OS
+Thumbs.db
+.DS_Store

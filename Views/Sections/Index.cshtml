@@ -1,0 +1,30 @@
+@model List<Section>
+@{ ViewData["Title"] = "Section Master"; var edit = Access.CanEdit("Sections"); }
+<div class="page-head">
+    <div><h3>Section Master</h3><p>Lines and units that belong to each department.</p></div>
+    @if (edit) { <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg me-1"></i>New section</a> }
+</div>
+<div class="list-tools"><div class="tsearch"><i class="bi bi-search"></i><input type="search" data-filter placeholder="Search..." autocomplete="off" aria-label="Search" /></div><span class="count" id="rowCount"></span></div>
+<div class="card-x flush">
+<table class="table table-hover align-middle js-filter">
+    <thead><tr><th>Department</th><th style="width:90px">Order</th><th>Section</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var x in Model)
+    {
+        <tr>
+            <td class="text-muted">@x.Department?.Name</td><td>@x.SortOrder</td><td><b>@x.Name</b></td>
+            <td class="text-end text-nowrap">
+                @if (Access.IsAdmin) { <a class="btn btn-sm btn-icon" title="History of this record" asp-controller="Audit" asp-action="Index" asp-route-Entity="Section" asp-route-EntityId="@x.Id"><i class="bi bi-clock-history"></i></a> }
+                @if (edit)
+                {
+                    <a class="btn btn-sm btn-icon" title="Edit" asp-action="Edit" asp-route-id="@x.Id"><i class="bi bi-pencil"></i></a>
+                    <form asp-action="Delete" asp-route-id="@x.Id" method="post" class="d-inline" onsubmit="return confirm('Delete @x.Name and its budgets?')">
+                        <button class="btn btn-sm btn-icon danger" title="Delete"><i class="bi bi-trash"></i></button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+</div>

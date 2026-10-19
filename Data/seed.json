@@ -1,0 +1,292 @@
+{
+    "factories":  [
+                      {
+                          "full":  "Concord, Avissawella",
+                          "name":  "Avissawella"
+                      },
+                      {
+                          "full":  "Concord Manufacturing, T\u0027Gama",
+                          "name":  "Concord Manufacturing"
+                      },
+                      {
+                          "full":  "Guston Lanka, Talawa",
+                          "name":  "Guston Lanka"
+                      },
+                      {
+                          "full":  "MG Apparel, Imbulana",
+                          "name":  "MG Apparel"
+                      }
+                  ],
+    "sections":  [
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 01",
+                         "budgets":  {
+                                         "Concord Manufacturing":  55,
+                                         "Guston Lanka":  48,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  45
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 02",
+                         "budgets":  {
+                                         "Concord Manufacturing":  50,
+                                         "Guston Lanka":  37,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  45
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 03",
+                         "budgets":  {
+                                         "Concord Manufacturing":  50,
+                                         "Guston Lanka":  48,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  45
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 04",
+                         "budgets":  {
+                                         "Concord Manufacturing":  50,
+                                         "Guston Lanka":  35,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  45
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 05",
+                         "budgets":  {
+                                         "Concord Manufacturing":  55,
+                                         "Guston Lanka":  45,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  45
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 06",
+                         "budgets":  {
+                                         "Concord Manufacturing":  55,
+                                         "Guston Lanka":  50,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  43
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 07",
+                         "budgets":  {
+                                         "Concord Manufacturing":  45,
+                                         "Guston Lanka":  35,
+                                         "MG Apparel":  84,
+                                         "Avissawella":  42
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 08",
+                         "budgets":  {
+                                         "Concord Manufacturing":  45,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  42
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 09",
+                         "budgets":  {
+                                         "Concord Manufacturing":  45,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 10",
+                         "budgets":  {
+                                         "Concord Manufacturing":  45,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 11",
+                         "budgets":  {
+                                         "Concord Manufacturing":  45,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 12",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 13",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 14",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 15",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 16",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "LINE 17",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  null,
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Sewing Lines",
+                         "section":  "JUMPERS",
+                         "budgets":  {
+                                         "Concord Manufacturing":  25,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Pre Production",
+                         "section":  "Pre Production 01",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  20,
+                                         "MG Apparel":  20,
+                                         "Avissawella":  35
+                                     }
+                     },
+                     {
+                         "dept":  "Pre Production",
+                         "section":  "Pre Production 02",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  15,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Pre Production",
+                         "section":  "Pre Production 03",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Pre Production",
+                         "section":  "Pre Production 04",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Central Processing",
+                         "section":  "MO/TMO (BTK/SPMC)",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  20
+                                     }
+                     },
+                     {
+                         "dept":  "Central Processing",
+                         "section":  "MO/TMO (SEAM SEELING)",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  30,
+                                         "Avissawella":  0
+                                     }
+                     },
+                     {
+                         "dept":  "Training Section",
+                         "section":  "MO/TMO",
+                         "budgets":  {
+                                         "Concord Manufacturing":  30,
+                                         "Guston Lanka":  20,
+                                         "MG Apparel":  30,
+                                         "Avissawella":  20
+                                     }
+                     },
+                     {
+                         "dept":  "Pregnant Mothers",
+                         "section":  "MO/TMO",
+                         "budgets":  {
+                                         "Concord Manufacturing":  0,
+                                         "Guston Lanka":  0,
+                                         "MG Apparel":  0,
+                                         "Avissawella":  0
+                                     }
+                     }
+                 ]
+}

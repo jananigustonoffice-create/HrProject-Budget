@@ -1,0 +1,75 @@
+@model EntryViewModel
+@{ ViewData["Title"] = "Daily Entry"; var edit = Access.CanEdit("Entry"); }
+<div class="page-head">
+    <div><h3>Daily Cadre Entry</h3><p>Pick a date and factory, then enter allocated and absent cadre.</p></div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+    @if (edit) { <a class="btn btn-outline-secondary" asp-action="Import"><i class="bi bi-file-earmark-excel me-1"></i>Import Excel</a> }
+    @if (Access.IsAdmin && Model.FactoryId != 0) { <a class="btn btn-outline-secondary" title="Who changed this day and factory, and what" asp-controller="Audit" asp-action="Index" asp-route-Entity="Daily entry" asp-route-EntityId="@($"{Model.Date:yyyy-MM-dd}|{Model.FactoryId}")"><i class="bi bi-clock-history me-1"></i>History</a> }
+    <form method="get" class="d-flex gap-2">
+        <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" class="form-control" onchange="this.form.submit()" />
+        <select name="factoryId" class="form-select" onchange="this.form.submit()">
+            <option value="0">Select factory...</option>
+            @foreach (var f in Model.Factories) { <option value="@f.Id" selected="@(f.Id == Model.FactoryId)">@f.Name</option> }
+        </select>
+    </form>
+    </div>
+</div>
+
+@if (Model.FactoryId == 0)
+{
+    <div class="card-x text-center text-muted py-5"><i class="bi bi-buildings fs-1"></i><div class="mt-2">Select a factory to begin.</div></div>
+}
+else
+{
+    <form method="post" asp-action="Index">
+        <input type="hidden" name="Date" value="@Model.Date.ToString("yyyy-MM-dd")" />
+        <input type="hidden" name="FactoryId" value="@Model.FactoryId" />
+        <div class="card-x flush mb-3" style="max-width:1180px">
+        <table class="table align-middle entry-t">
+            <thead><tr><th>Section</th><th style="width:120px">Budget</th><th style="width:120px">Allocated</th><th style="width:130px">Absent</th><th class="text-end">Present</th><th class="text-end">Shortage</th></tr></thead>
+            <tbody>
+            @{ string? dep = null; int i = 0; }
+            @foreach (var r in Model.Rows)
+            {
+                if (r.Department != dep)
+                {
+                    dep = r.Department;
+                    <tr class="table-secondary"><td colspan="6"><strong>@dep</strong></td></tr>
+                }
+                <tr data-row>
+                    <td>@r.Section<input type="hidden" name="Rows[@i].SectionId" value="@r.SectionId" /></td>
+                    <td data-label="Budget"><input type="number" min="0" class="form-control form-control-sm budget" name="Rows[@i].Budget" value="@r.Budget" readonly title="Change budgets in Budget Master" disabled="@(!edit)" /></td>
+                    <td data-label="Allocated"><input type="number" min="0" class="form-control form-control-sm alloc" name="Rows[@i].Allocated" value="@r.Allocated" disabled="@(!edit)" /></td>
+                    <td data-label="Absent"><input type="number" min="0" class="form-control form-control-sm ab" name="Rows[@i].Absent" value="@r.Absent" disabled="@(!edit)" /></td>
+                    <td class="text-end present fw-semibold" data-label="Present"></td>
+                    <td class="text-end shortage fw-semibold" data-label="Shortage"></td>
+                </tr>
+                i++;
+            }
+            </tbody>
+            <tfoot><tr><td>Total</td><td id="tb" data-label="Budget"></td><td id="ta" data-label="Allocated"></td><td id="tab" data-label="Absent"></td><td class="text-end present" id="tp" data-label="Present"></td><td class="text-end shortage" id="ts" data-label="Shortage"></td></tr></tfoot>
+        </table>
+        </div>
+        @if (Model.Rows.Count == 0) { <div class="alert alert-warning">No sections defined yet. Add departments and sections in the master screens.</div> }
+        else if (edit) { <div class="save-bar"><button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Save entries</button><span class="text-muted small">Present and shortage calculate as you type.</span></div> }
+        else { <div class="text-muted small"><i class="bi bi-eye me-1"></i>View only access.</div> }
+    </form>
+}
+
+@section Scripts {
+<script>
+    const tb_ = document.getElementById('tb'), ta_ = document.getElementById('ta'), tab_ = document.getElementById('tab'), tp_ = document.getElementById('tp'), ts_ = document.getElementById('ts');
+    function recalc() {
+        let tb = 0, ta = 0, tab = 0;
+        document.querySelectorAll('tr[data-row]').forEach(tr => {
+            const b = +tr.querySelector('.budget').value || 0, a = +tr.querySelector('.alloc').value || 0, ab = +tr.querySelector('.ab').value || 0;
+            tr.querySelector('.present').textContent = a - ab;
+            const s = tr.querySelector('.shortage'); s.textContent = a - b; s.classList.toggle('neg', a - b < 0);
+            tb += b; ta += a; tab += ab;
+        });
+        tb_.textContent = tb; ta_.textContent = ta; tab_.textContent = tab; tp_.textContent = ta - tab;
+        ts_.textContent = ta - tb; ts_.classList.toggle('neg', ta - tb < 0);
+    }
+    if (tb_) { document.addEventListener('input', recalc); recalc(); }
+</script>
+}

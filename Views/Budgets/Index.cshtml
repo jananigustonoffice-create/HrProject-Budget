@@ -1,0 +1,33 @@
+@model List<BudgetMaster>
+@{ ViewData["Title"] = "Budget Master"; var edit = Access.CanEdit("Budgets"); }
+<div class="page-head">
+    <div><h3>Budget Master</h3><p>Budgeted cadre for each section in each factory.</p></div>
+    <form method="get" class="d-flex gap-2">
+        <select name="factoryId" asp-items="ViewBag.Factories" class="form-select" onchange="this.form.submit()"><option value="">All factories</option></select>
+        @if (edit) { <a class="btn btn-primary text-nowrap" asp-action="Create"><i class="bi bi-plus-lg me-1"></i>New budget</a> }
+    </form>
+</div>
+<div class="list-tools"><div class="tsearch"><i class="bi bi-search"></i><input type="search" data-filter placeholder="Search..." autocomplete="off" aria-label="Search" /></div><span class="count" id="rowCount"></span></div>
+<div class="card-x flush">
+<table class="table table-hover align-middle js-filter">
+    <thead><tr><th>Factory</th><th>Department</th><th>Section</th><th class="text-end">Budget</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var x in Model)
+    {
+        <tr>
+            <td><b>@x.Factory?.Name</b></td><td class="text-muted">@x.Section?.Department?.Name</td><td>@x.Section?.Name</td><td class="text-end fw-bold">@x.Budget</td>
+            <td class="text-end text-nowrap">
+                @if (Access.IsAdmin) { <a class="btn btn-sm btn-icon" title="History of this record" asp-controller="Audit" asp-action="Index" asp-route-Entity="Budget" asp-route-EntityId="@x.Id"><i class="bi bi-clock-history"></i></a> }
+                @if (edit)
+                {
+                    <a class="btn btn-sm btn-icon" title="Edit" asp-action="Edit" asp-route-id="@x.Id"><i class="bi bi-pencil"></i></a>
+                    <form asp-action="Delete" asp-route-id="@x.Id" method="post" class="d-inline" onsubmit="return confirm('Delete this budget?')">
+                        <button class="btn btn-sm btn-icon danger" title="Delete"><i class="bi bi-trash"></i></button>
+                    </form>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+</div>

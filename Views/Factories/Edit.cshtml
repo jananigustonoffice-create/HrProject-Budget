@@ -1,0 +1,13 @@
+﻿@model Factory
+@{ ViewData["Title"] = "Factory"; }
+<div class="page-head"><div><h3>@(Model.Id == 0 ? "New" : "Edit") Factory</h3></div></div>
+<form asp-action="Save" method="post" class="card-x" style="max-width:520px">
+    <input type="hidden" asp-for="Id" />
+    <div class="mb-3"><label asp-for="Name" class="form-label"></label><input asp-for="Name" class="form-control" /><span asp-validation-for="Name" class="text-danger"></span></div>
+    <div class="mb-3"><label asp-for="FullName" class="form-label"></label><input asp-for="FullName" class="form-control" /></div>
+    <div class="mb-3"><label asp-for="SortOrder" class="form-label"></label><input asp-for="SortOrder" class="form-control" /></div>
+    <button class="btn btn-primary">Save</button> <a class="btn btn-link" asp-action="Index">Cancel</a>
+</form>
+
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }
+

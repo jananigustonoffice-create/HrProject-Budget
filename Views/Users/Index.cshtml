@@ -1,0 +1,43 @@
+@model List<AppUser>
+@{ ViewData["Title"] = "Users & Access"; }
+<div class="page-head">
+    <div><h3>Users &amp; Access</h3><p>Create users and control what each one can open.</p></div>
+    <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg me-1"></i>New user</a>
+</div>
+<div class="list-tools"><div class="tsearch"><i class="bi bi-search"></i><input type="search" data-filter placeholder="Search..." autocomplete="off" aria-label="Search" /></div><span class="count" id="rowCount"></span></div>
+<div class="card-x flush">
+<table class="table table-hover align-middle js-filter">
+    <thead><tr><th>User</th><th>Role</th><th>Screens</th><th>Factories</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var x in Model)
+    {
+        <tr>
+            <td><b>@x.FullName</b><div class="text-muted small">@x.Username</div></td>
+            <td>@switch (x.Role)
+                {
+                    case Role.Admin: <span class="pill pill-admin">Admin</span> break;
+                    case Role.SuperUser: <span class="pill pill-super">Super User</span> break;
+                    default: <span class="pill pill-user">User</span> break;
+                }</td>
+            <td class="small text-muted">
+                @if (x.Role == Role.Admin) { <text>All screens, full control</text> }
+                else if (x.Role == Role.SuperUser) { <text>All screens, view only</text> }
+                else if (x.Permissions.Count == 0) { <text>No screens granted</text> }
+                else { <text>@string.Join(", ", x.Permissions.OrderBy(p => p.Screen).Select(p => p.Screen + (p.CanEdit ? " (edit)" : " (view)")))</text> }
+            </td>
+            <td class="small">
+                @if (x.Role == Role.Admin || x.AllFactories) { <span class="text-muted">All factories</span> }
+                else { var names = (Dictionary<int, string>)ViewBag.FactoryNames; foreach (var uf in x.Factories) { <span class="chip">@names.GetValueOrDefault(uf.FactoryId, "#" + uf.FactoryId)</span> } }
+            </td>
+            <td>@if (x.IsActive) { <span class="pill pill-on">Active</span> } else { <span class="pill pill-off">Disabled</span> }</td>
+            <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-icon" title="Edit" asp-action="Edit" asp-route-id="@x.Id"><i class="bi bi-pencil"></i></a>
+                <form asp-action="Delete" asp-route-id="@x.Id" method="post" class="d-inline" onsubmit="return confirm('Delete user @x.Username?')">
+                    <button class="btn btn-sm btn-icon danger" title="Delete"><i class="bi bi-trash"></i></button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+</div>

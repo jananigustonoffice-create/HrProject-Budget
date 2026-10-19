@@ -1,0 +1,5 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=<server>,<port>;Database=CardreDB;User Id=<user>;Password=<password>;TrustServerCertificate=True;"
+  }
+}

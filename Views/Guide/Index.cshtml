@@ -1,0 +1,108 @@
+@model HrProject_Budget.Controllers.GuideController.GuideVm
+@{ ViewData["Title"] = "User Guide"; }
+<div class="page-head">
+    <div>
+        <h3>User Guide</h3>
+        <p class="text-muted mb-0">Step-by-step help with pictures and videos. Download it, print it or share it with others.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Model.HasPdf)
+        {
+            <a class="btn btn-primary" asp-action="Download"><i class="bi bi-download"></i> Download PDF</a>
+            <button type="button" class="btn btn-outline-secondary" id="gPrint"><i class="bi bi-printer"></i> Print</button>
+            <button type="button" class="btn btn-outline-secondary" id="gShare"><i class="bi bi-share"></i> Share</button>
+        }
+    </div>
+</div>
+
+<ul class="nav nav-pills gtabs mb-3" id="gTabs">
+    <li class="nav-item"><button type="button" class="nav-link active" data-t="doc"><i class="bi bi-file-earmark-text"></i> Guide (PDF)</button></li>
+    <li class="nav-item"><button type="button" class="nav-link" data-t="vid"><i class="bi bi-play-circle"></i> Videos (@Model.Videos.Count)</button></li>
+</ul>
+
+<div id="t-doc">
+@if (!Model.HasPdf)
+{
+    <div class="card-x">The user guide file is not available yet. Please ask your administrator.</div>
+}
+else
+{
+    <div class="card-x flush" style="overflow:hidden">
+        <iframe id="gFrame" src="@Url.Action("Open")#view=FitH" title="User Guide" style="width:100%;height:80vh;min-height:520px;border:0;display:block"></iframe>
+    </div>
+    <p class="small text-muted mt-3"><i class="bi bi-info-circle"></i> On a phone the guide may not show here &ndash; use <b>Download PDF</b> and open it in your PDF app.</p>
+}
+</div>
+
+<div id="t-vid" hidden>
+@if (Model.Videos.Count == 0)
+{
+    <div class="card-x text-center py-5"><i class="bi bi-camera-video" style="font-size:2rem;color:var(--muted)"></i><p class="mb-0 mt-2">No videos have been added yet.@(Access.IsAdmin ? " Use the box below to add one." : " Please check again later.")</p></div>
+}
+else
+{
+    <div class="row g-3">
+    @foreach (var v in Model.Videos)
+    {
+        <div class="col-12 col-xl-6">
+            <div class="card-x">
+                <video controls preload="metadata" playsinline style="width:100%;border-radius:12px;background:#000;max-height:60vh" src="@Url.Action("Video", new { name = v.File })"></video>
+                <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
+                    <div><b>@v.Title</b><div class="small text-muted">@((v.Size / 1048576.0).ToString("0.#")) MB</div></div>
+                    <div class="d-flex gap-1">
+                        <a class="btn btn-sm btn-outline-secondary" asp-action="DownloadVideo" asp-route-name="@v.File"><i class="bi bi-download"></i> Download</a>
+                        @if (Access.IsAdmin)
+                        {
+                            <form asp-action="DeleteVideo" asp-route-name="@v.File" method="post" onsubmit="return confirm('Remove this video?')"><button class="btn btn-sm btn-icon danger" title="Remove"><i class="bi bi-trash"></i></button></form>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    </div>
+}
+@if (Access.IsAdmin)
+{
+    <form asp-action="Upload" method="post" enctype="multipart/form-data" class="card-x mt-3">
+        <h6 class="mb-2"><i class="bi bi-cloud-upload"></i> Add a video <span class="small text-muted">(administrator only)</span></h6>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4"><label class="form-label">Title</label><input name="title" class="form-control" placeholder="e.g. How to enter daily cadre" maxlength="80" /></div>
+            <div class="col-md-5"><label class="form-label">Video file (.mp4 or .webm, up to 1 GB)</label><input type="file" name="file" accept=".mp4,.m4v,.webm,video/mp4,video/webm" class="form-control" required /></div>
+            <div class="col-md-3"><button class="btn btn-primary w-100">Upload</button></div>
+        </div>
+        <div class="form-text mt-2">Tip: record your screen with <b>Windows + Alt + R</b> (Xbox Game Bar) &ndash; it saves an .mp4 you can upload here.</div>
+    </form>
+}
+</div>
+
+<style>
+    .gtabs .nav-link { color: var(--ink, #0f172a); border-radius: 999px; padding: .45rem 1rem; }
+    .gtabs .nav-link.active { background: #15171c; color: #5eead4; }
+</style>
+@section Scripts {
+<script>
+    (function () {
+        function show(t) {
+            document.getElementById('t-doc').hidden = t !== 'doc';
+            document.getElementById('t-vid').hidden = t !== 'vid';
+            document.querySelectorAll('#gTabs .nav-link').forEach(function (b) { b.classList.toggle('active', b.dataset.t === t); });
+            if (t !== 'vid') document.querySelectorAll('video').forEach(function (v) { v.pause(); });
+        }
+        document.querySelectorAll('#gTabs .nav-link').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.t); }); });
+        if (location.hash === '#vid' || @(Model.Videos.Count > 0 && (TempData.Peek("Ok") as string) == "Video added." ? "true" : "false")) show('vid');
+        document.getElementById('gPrint')?.addEventListener('click', function () {
+            show('doc');
+            var f = document.getElementById('gFrame');
+            try { f.contentWindow.focus(); f.contentWindow.print(); }
+            catch (e) { window.open('@Url.Action("Open")', '_blank'); }
+        });
+        document.getElementById('gShare')?.addEventListener('click', async function () {
+            var url = location.origin + '@Url.Action("Index")';
+            var text = 'Cadre Management System - User Guide. Sign in and open: ' + url;
+            if (navigator.share) { try { await navigator.share({ title: 'Cadre Management System - User Guide', text: text, url: url }); } catch (e) { } return; }
+            location.href = 'mailto:?subject=' + encodeURIComponent('Cadre Management System - User Guide') + '&body=' + encodeURIComponent(text);
+        });
+    })();
+</script>
+}

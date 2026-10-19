@@ -1,0 +1,167 @@
+@model AuditViewModel
+@using System.Text.Json
+@using System.Globalization
+@{
+    ViewData["Title"] = "Activity Log";
+    var f = Model.Filter;
+    var inv = CultureInfo.InvariantCulture;
+
+    string Badge(string a) => a switch
+    {
+        "Create" => "ab-green", "Update" => "ab-blue", "Delete" => "ab-red", "Login" => "ab-teal", "Logout" => "ab-gray",
+        "LoginFailed" => "ab-red", "Import" => "ab-violet", "Export" => "ab-amber", _ => "ab-gray"
+    };
+    string Icon(string a) => a switch
+    {
+        "Create" => "plus-circle", "Update" => "pencil", "Delete" => "trash", "Login" => "box-arrow-in-right", "Logout" => "box-arrow-right",
+        "LoginFailed" => "shield-exclamation", "Import" => "file-earmark-arrow-up", "Export" => "download", _ => "activity"
+    };
+    List<AuditChange> Changes(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return new();
+        try { return JsonSerializer.Deserialize<List<AuditChange>>(json) ?? new(); } catch { return new(); }
+    }
+    // keeps every filter when paging / exporting
+    Dictionary<string, string> Q(int? page = null) => new Dictionary<string, string?>
+    {
+        ["From"] = f.From?.ToString("yyyy-MM-dd"), ["To"] = f.To?.ToString("yyyy-MM-dd"), ["User"] = f.User, ["Type"] = f.Type,
+        ["Entity"] = f.Entity, ["EntityId"] = f.EntityId, ["Q"] = f.Q, ["Page"] = page?.ToString(), ["PageSize"] = f.PageSize != 50 ? f.PageSize.ToString() : null
+    }.Where(kv => !string.IsNullOrEmpty(kv.Value)).ToDictionary(kv => kv.Key, kv => kv.Value!);
+    var hasFilter = f.From != null || f.To != null || !string.IsNullOrWhiteSpace(f.User) || !string.IsNullOrWhiteSpace(f.Type) || !string.IsNullOrWhiteSpace(f.Entity) || !string.IsNullOrWhiteSpace(f.EntityId) || !string.IsNullOrWhiteSpace(f.Q);
+}
+
+<div class="page-head">
+    <div><h3>Activity Log</h3><p>Every sign-in, data change, import and download &mdash; who did it, when, and the old and new values.</p></div>
+    <a class="btn btn-primary" asp-action="Export" asp-all-route-data="Q()"><i class="bi bi-file-earmark-excel me-1"></i>Download Excel</a>
+</div>
+
+<div class="strip strip-4 mb-4">
+    <div class="strip-i" style="--a:#0d9488"><span class="si"><i class="bi bi-list-check"></i></span><div><label>Events</label><b>@Model.Total.ToString("N0")</b></div></div>
+    <div class="strip-i" style="--a:#10b981"><span class="si"><i class="bi bi-box-arrow-in-right"></i></span><div><label>Sign-ins</label><b>@Model.Logins.ToString("N0")</b></div></div>
+    <div class="strip-i" style="--a:#f43f5e"><span class="si"><i class="bi bi-shield-exclamation"></i></span><div><label>Failed sign-ins</label><b class="@(Model.FailedLogins > 0 ? "neg-t" : "")">@Model.FailedLogins.ToString("N0")</b></div></div>
+    <div class="strip-i" style="--a:#0ea5e9"><span class="si"><i class="bi bi-pencil-square"></i></span><div><label>Data changes</label><b>@Model.DataChanges.ToString("N0")</b></div></div>
+</div>
+
+<form method="get" class="card-x mb-3 alog-filters">
+    <div class="row g-2 align-items-end">
+        <div class="col-6 col-md-2"><label class="form-label">From</label><input type="date" name="From" value="@f.From?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2"><label class="form-label">To</label><input type="date" name="To" value="@f.To?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" /></div>
+        <div class="col-6 col-md-2"><label class="form-label">User</label>
+            <select name="User" class="form-select form-select-sm"><option value="">All users</option>@foreach (var u in Model.Users) { <option value="@u" selected="@(u == f.User)">@u</option> }</select></div>
+        <div class="col-6 col-md-2"><label class="form-label">Action</label>
+            <select name="Type" class="form-select form-select-sm"><option value="">All actions</option>@foreach (var a in Model.Actions) { <option value="@a" selected="@(a == f.Type)">@a</option> }</select></div>
+        <div class="col-6 col-md-2"><label class="form-label">Area</label>
+            <select name="Entity" class="form-select form-select-sm"><option value="">All areas</option>@foreach (var e in Model.Entities) { <option value="@e" selected="@(e == f.Entity)">@e</option> }</select></div>
+        <div class="col-6 col-md-2"><label class="form-label">Search</label><input name="Q" value="@f.Q" class="form-control form-control-sm" placeholder="name, value..." /></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+        <button class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply</button>
+        @if (hasFilter) { <a class="btn btn-outline-secondary btn-sm" asp-action="Index">Clear</a> }
+        <div class="quick ms-2">
+            <a href="?From=@DateTime.Today.ToString("yyyy-MM-dd")&To=@DateTime.Today.ToString("yyyy-MM-dd")">Today</a>
+            <a href="?From=@DateTime.Today.AddDays(-6).ToString("yyyy-MM-dd")&To=@DateTime.Today.ToString("yyyy-MM-dd")">Last 7 days</a>
+            <a href="?From=@(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).ToString("yyyy-MM-dd"))&To=@DateTime.Today.ToString("yyyy-MM-dd")">This month</a>
+            <a href="?Type=LoginFailed">Failed sign-ins</a>
+            <a href="?Type=Delete">Deletions</a>
+            <a href="?Type=Export">Downloads</a>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(f.EntityId))
+        {
+            <span class="hist-chip"><i class="bi bi-clock-history"></i> History of @f.Entity #@f.EntityId <a asp-action="Index" asp-route-Entity="@f.Entity">show all @f.Entity</a></span>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(f.EntityId)) { <input type="hidden" name="EntityId" value="@f.EntityId" /> }
+</form>
+
+<div class="card-x flush">
+    <table class="table alog align-middle">
+        <thead><tr><th style="width:158px">When</th><th style="width:130px">User</th><th style="width:130px">Action</th><th style="width:130px">Area</th><th>What happened</th><th style="width:44px"></th></tr></thead>
+        <tbody>
+        @if (Model.Rows.Count == 0)
+        {
+            <tr><td colspan="6" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-1"></i>No activity matches these filters.</td></tr>
+        }
+        @foreach (var a in Model.Rows)
+        {
+            var ch = Changes(a.Details);
+            var t = a.Time.ToLocalTime();
+            <tr class="@(ch.Count > 0 ? "has-d" : "")" data-id="@a.Id">
+                <td><b>@t.ToString("dd MMM yyyy", inv)</b><div class="text-muted small">@t.ToString("HH:mm:ss", inv)</div></td>
+                <td><span class="who"><i class="bi bi-person-circle"></i> @a.Username</span>@if (!string.IsNullOrEmpty(a.Ip)) { <div class="text-muted small">@a.Ip</div> }</td>
+                <td><span class="abadge @Badge(a.Action)"><i class="bi bi-@Icon(a.Action)"></i>@a.Action</span></td>
+                <td>@a.Entity</td>
+                <td>@a.Summary
+                    @if (!string.IsNullOrEmpty(a.EntityId) && a.Entity != "Auth" && a.Entity != "Report" && a.Entity != "Dashboard" && a.Entity != "Activity log")
+                    {
+                        <a class="hist-link" title="Full history of this record" asp-action="Index" asp-route-Entity="@a.Entity" asp-route-EntityId="@a.EntityId"><i class="bi bi-clock-history"></i></a>
+                    }
+                </td>
+                <td class="text-end">@if (ch.Count > 0) { <button type="button" class="btn btn-sm btn-outline-secondary tgl" title="Show old and new values" aria-expanded="false"><i class="bi bi-chevron-down"></i></button> }</td>
+            </tr>
+            if (ch.Count > 0)
+            {
+                <tr class="d-row" hidden>
+                    <td colspan="6">
+                        <table class="chg">
+                            <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+                            <tbody>
+                            @foreach (var c in ch)
+                            {
+                                <tr><td>@c.Field</td><td class="old">@(c.Old ?? "")</td><td class="new">@(c.New ?? "")</td></tr>
+                            }
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            }
+        }
+        </tbody>
+    </table>
+    @{
+        var first = Model.Total == 0 ? 0 : (f.Page - 1) * Model.PageSize + 1;
+        var last = Math.Min(Model.Total, f.Page * Model.PageSize);
+        var from = Math.Max(1, f.Page - 2); var to = Math.Min(Model.Pages, from + 4); from = Math.Max(1, to - 4);
+    }
+    <div class="pager">
+        <span class="text-muted small">Showing <b>@first.ToString("N0")&ndash;@last.ToString("N0")</b> of <b>@Model.Total.ToString("N0")</b> events</span>
+        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
+            <label class="small text-muted d-flex align-items-center gap-2 mb-0">Rows per page
+                <select class="form-select form-select-sm" style="width:84px" onchange="location.href=this.value">
+                    @foreach (var n in new[] { 25, 50, 100, 200 })
+                    {
+                        var qq = Q(1); qq["PageSize"] = n.ToString();
+                        <option value="@Url.Action("Index", qq)" selected="@(n == Model.PageSize)">@n</option>
+                    }
+                </select>
+            </label>
+            @if (Model.Pages > 1)
+            {
+                var ps = Model.PageSize != 50 ? Model.PageSize.ToString() : null;
+                Dictionary<string, string> P(int pg) { var d = Q(pg); if (ps != null) d["PageSize"] = ps; return d; }
+                <nav class="d-flex gap-1" aria-label="Pages">
+                    <a class="btn btn-sm btn-outline-secondary @(f.Page == 1 ? "disabled" : "")" title="Newest" asp-action="Index" asp-all-route-data="P(1)"><i class="bi bi-chevron-double-left"></i></a>
+                    <a class="btn btn-sm btn-outline-secondary @(f.Page == 1 ? "disabled" : "")" title="Newer" asp-action="Index" asp-all-route-data="P(Math.Max(1, f.Page - 1))"><i class="bi bi-chevron-left"></i></a>
+                    @if (from > 1) { <span class="px-1 text-muted">&hellip;</span> }
+                    @for (var i = from; i <= to; i++)
+                    {
+                        <a class="btn btn-sm @(i == f.Page ? "btn-primary" : "btn-outline-secondary")" asp-action="Index" asp-all-route-data="P(i)">@i</a>
+                    }
+                    @if (to < Model.Pages) { <span class="px-1 text-muted">&hellip;</span> }
+                    <a class="btn btn-sm btn-outline-secondary @(f.Page == Model.Pages ? "disabled" : "")" title="Older" asp-action="Index" asp-all-route-data="P(Math.Min(Model.Pages, f.Page + 1))"><i class="bi bi-chevron-right"></i></a>
+                    <a class="btn btn-sm btn-outline-secondary @(f.Page == Model.Pages ? "disabled" : "")" title="Oldest" asp-action="Index" asp-all-route-data="P(Model.Pages)"><i class="bi bi-chevron-double-right"></i></a>
+                </nav>
+            }
+        </div>
+    </div></div>
+
+@section Scripts {
+<script>
+    document.querySelectorAll('.alog .tgl').forEach(b => b.addEventListener('click', () => {
+        const tr = b.closest('tr'), d = tr.nextElementSibling;
+        const open = d.hidden; d.hidden = !open; b.setAttribute('aria-expanded', open);
+        b.querySelector('i').className = open ? 'bi bi-chevron-up' : 'bi bi-chevron-down'; tr.classList.toggle('open', open);
+    }));
+    // clicking anywhere on a row that has details also toggles it
+    document.querySelectorAll('.alog tr.has-d').forEach(tr => tr.addEventListener('click', e => { if (!e.target.closest('a,button')) tr.querySelector('.tgl').click(); }));
+</script>
+}

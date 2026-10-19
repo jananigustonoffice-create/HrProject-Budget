@@ -1,0 +1,81 @@
+@model LoginModel
+@{ Layout = null; var errs = ViewData.ModelState.Values.SelectMany(x => x.Errors).Where(x => !string.IsNullOrEmpty(x.ErrorMessage)).ToList(); }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in - Cadre Management System</title>
+    <link rel="icon" type="image/png" href="~/img/logo-teal.png" />
+    <link rel="stylesheet" href="~/lib/inter/inter.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+<div class="lg3">
+
+    <section class="lg3-photo">
+        <div class="lg3-img" role="img" aria-label="Two colleagues reviewing staffing on a tablet and a printed sheet on a garment factory floor"></div>
+        <div class="lg3-cap">Better staffing. Stronger teams.</div>
+    </section>
+
+    <section class="lg3-panel">
+        <div class="lg3-in">
+            <div class="lg3-brand"><img src="~/img/logo-teal.png" alt="Concord Group" /><span>CONCORD GROUP</span></div>
+
+            <div class="lg3-eyebrow">CADRE MANAGEMENT SYSTEM</div>
+            <h1>Sign in</h1>
+            <p class="lg3-sub">Your workforce, connected.</p>
+
+            <form method="post" asp-action="Login" id="loginForm" novalidate>
+                <input type="hidden" asp-for="ReturnUrl" />
+
+                @if (errs.Count > 0)
+                {
+                    <div class="lg3-err" role="alert"><i class="bi bi-exclamation-circle-fill"></i><span>@errs[0].ErrorMessage</span></div>
+                }
+
+                <div class="lg3-field">
+                    <label asp-for="Username" class="lg3-label">Username</label>
+                    <input asp-for="Username" placeholder="Enter your username" autocomplete="username" autofocus />
+                </div>
+                <div class="lg3-field">
+                    <label asp-for="Password" class="lg3-label">Password</label>
+                    <input asp-for="Password" placeholder="Enter your password" autocomplete="current-password" id="pw" />
+                    <button type="button" class="eye" id="eye" aria-label="Show password" title="Show / hide password"><i class="bi bi-eye"></i></button>
+                </div>
+                <div class="lg3-caps" id="caps"><i class="bi bi-exclamation-triangle-fill"></i> Caps Lock is on</div>
+
+                <div class="lg3-row">
+                    <label class="lg3-check"><input type="checkbox" name="RememberMe" value="true" /><span class="box"><i class="bi bi-check-lg"></i></span> Remember me</label>
+                    <a href="#" class="lg3-link" id="forgot">Forgot password?</a>
+                </div>
+                <div class="lg3-forgot" id="forgotNote"><i class="bi bi-info-circle me-1"></i>Passwords are managed by your administrator. Please ask them to reset yours.</div>
+
+                <button class="lg3-btn" id="go"><span class="spin"></span><span class="t">Sign in</span><i class="bi bi-arrow-right"></i></button>
+            </form>
+
+            <p class="lg3-access">Need access? Contact your administrator</p>
+        </div>
+        <div class="lg3-copy">&copy; 2026 Concord Group</div>
+    </section>
+</div>
+<script>
+    (function () {
+        const pw = document.getElementById('pw'), eye = document.getElementById('eye'), caps = document.getElementById('caps');
+        eye.addEventListener('click', () => {
+            const show = pw.type === 'password'; pw.type = show ? 'text' : 'password';
+            eye.querySelector('i').className = 'bi ' + (show ? 'bi-eye-slash' : 'bi-eye');
+            eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password'); pw.focus();
+        });
+        const check = e => caps.classList.toggle('on', !!(e.getModifierState && e.getModifierState('CapsLock')));
+        pw.addEventListener('keydown', check); pw.addEventListener('keyup', check); pw.addEventListener('blur', () => caps.classList.remove('on'));
+        document.getElementById('forgot').addEventListener('click', e => { e.preventDefault(); document.getElementById('forgotNote').classList.toggle('on'); });
+        document.getElementById('loginForm').addEventListener('submit', () => {
+            const b = document.getElementById('go'); b.classList.add('busy'); b.querySelector('.t').textContent = 'Signing in...';
+        });
+    })();
+</script>
+</body>
+</html>

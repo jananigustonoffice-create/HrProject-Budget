@@ -1,0 +1,280 @@
+@* Built-in help for beginners: a Help button on every screen, a side panel with simple steps for the screen you are on,
+   a "show me on screen" spotlight tour, and a welcome tour the first time someone signs in. *@
+@{
+    var helpCtrl = ((string?)ViewContext.RouteData.Values["controller"] ?? "").ToLowerInvariant();
+    var helpAct = ((string?)ViewContext.RouteData.Values["action"] ?? "").ToLowerInvariant();
+    var helpKey = helpCtrl == "entry" && helpAct == "import" ? "import" : helpCtrl;
+    var helpUser = Access.User?.Id.ToString() ?? "0";
+    var canEditEntry = Access.CanEdit("Entry");
+}
+<div id="hp-overlay" hidden></div>
+<aside id="hp-panel" aria-hidden="true" aria-label="Help">
+    <div class="hp-head">
+        <div><small>HELP</small><h4 id="hp-title">Help</h4></div>
+        <button type="button" class="hp-x" id="hp-close" aria-label="Close help"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="hp-body" id="hp-body"></div>
+    <div class="hp-foot">
+        <button type="button" class="btn btn-primary w-100" id="hp-show"><i class="bi bi-cursor me-1"></i> Show me on the screen</button>
+        <div class="hp-links">
+            <a href="#" id="hp-welcome"><i class="bi bi-compass"></i> Welcome tour</a>
+            <a asp-controller="Guide" asp-action="Index"><i class="bi bi-book"></i> Full guide</a>
+            <a href="@Url.Action("Index", "Guide")#vid"><i class="bi bi-play-circle"></i> Videos</a>
+        </div>
+    </div>
+</aside>
+
+<div id="sp-ring" hidden></div>
+<div id="sp-card" hidden role="dialog" aria-live="polite">
+    <div class="sp-count" id="sp-count"></div>
+    <h5 id="sp-title"></h5>
+    <p id="sp-text"></p>
+    <div class="sp-btns">
+        <button type="button" class="btn btn-sm btn-link text-muted" id="sp-skip">Skip</button>
+        <span class="flex-grow-1"></span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="sp-back">Back</button>
+        <button type="button" class="btn btn-sm btn-primary" id="sp-next">Next</button>
+    </div>
+</div>
+
+<div id="hp-welcome-box" hidden>
+    <div class="wb-card">
+        <div class="wb-ico"><i class="bi bi-stars"></i></div>
+        <h3>Welcome, @(Access.User?.FullName?.Split(' ')[0])!</h3>
+        <p>New to the system? No problem. Take a <b>1-minute tour</b> and we will point out where everything is.</p>
+        <p class="small text-muted">You can open <b>Help</b> at the top of any screen at any time.</p>
+        <div class="d-grid gap-2">
+            <button type="button" class="btn btn-primary btn-lg" id="wb-go">Start the tour</button>
+            <button type="button" class="btn btn-link text-muted" id="wb-later">Maybe later</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    #hp-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1990; }
+    #hp-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: #fff; z-index: 2000; box-shadow: -18px 0 50px rgba(15,23,42,.25); transform: translateX(105%); transition: transform .25s ease; display: flex; flex-direction: column; }
+    #hp-panel.open { transform: none; }
+    .hp-head { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 22px 14px; background: linear-gradient(135deg, #15171c, #0f766e); color: #fff; }
+    .hp-head small { letter-spacing: .2em; color: #5eead4; font-weight: 700; font-size: .68rem; }
+    .hp-head h4 { margin: 2px 0 0; font-size: 1.25rem; font-weight: 800; }
+    .hp-x { border: 0; background: rgba(255,255,255,.14); color: #fff; width: 34px; height: 34px; border-radius: 10px; }
+    .hp-body { flex: 1; overflow: auto; padding: 18px 22px; font-size: .97rem; }
+    .hp-body .hp-what { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+    .hp-body h6 { font-weight: 800; margin: 16px 0 8px; color: #0f766e; text-transform: uppercase; letter-spacing: .06em; font-size: .75rem; }
+    .hp-body ol { list-style: none; counter-reset: s; padding: 0; margin: 0; }
+    .hp-body ol li { counter-increment: s; position: relative; padding: 0 0 12px 38px; }
+    .hp-body ol li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: #0d9488; color: #fff; font-weight: 700; font-size: .82rem; display: grid; place-items: center; }
+    .hp-body ul { padding-left: 1.1rem; }
+    .hp-body .hp-tip { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 10px 14px; margin-top: 8px; }
+    .hp-foot { padding: 14px 22px 18px; border-top: 1px solid #e5e9f2; background: #f8fafc; }
+    .hp-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 12px; font-size: .86rem; flex-wrap: wrap; }
+    .hp-links a { color: #0f766e; text-decoration: none; font-weight: 600; }
+    #helpBtn { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 999px; padding: 7px 16px; font-weight: 700; font-size: .88rem; background: #35c3b0; color: #08231f; box-shadow: 0 6px 16px rgba(45,212,191,.28); white-space: nowrap; }
+    #helpBtn:hover { background: #45d3c0; }
+    #helpBtn.pulse { animation: hpPulse 1.8s infinite; }
+    @@keyframes hpPulse { 0% { box-shadow: 0 0 0 0 rgba(45,212,191,.7); } 70% { box-shadow: 0 0 0 14px rgba(45,212,191,0); } 100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); } }
+    @@media (prefers-reduced-motion: reduce) { #helpBtn.pulse { animation: none; } #hp-panel { transition: none; } }
+    @@media (max-width: 560px) { #helpBtn span { display: none; } #helpBtn { padding: 8px 11px; } }
+
+    #sp-ring { position: fixed; z-index: 2100; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15,23,42,.62), 0 0 0 3px #2dd4bf; pointer-events: none; transition: all .25s ease; }
+    #sp-card { position: fixed; z-index: 2110; width: min(340px, calc(100vw - 24px)); background: #fff; border-radius: 16px; padding: 16px 18px 14px; box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+    #sp-card h5 { font-weight: 800; margin: 2px 0 6px; font-size: 1.05rem; }
+    #sp-card p { margin: 0 0 12px; color: #334155; font-size: .95rem; }
+    .sp-count { font-size: .72rem; font-weight: 700; letter-spacing: .08em; color: #0d9488; text-transform: uppercase; }
+    .sp-btns { display: flex; gap: 6px; align-items: center; }
+
+    #hp-welcome-box { position: fixed; inset: 0; z-index: 2200; background: rgba(15,23,42,.65); display: grid; place-items: center; padding: 16px; }
+    #hp-welcome-box[hidden] { display: none; }
+    .wb-card { background: #fff; border-radius: 22px; padding: 28px 28px 20px; max-width: 420px; width: 100%; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+    .wb-ico { width: 62px; height: 62px; margin: 0 auto 10px; border-radius: 18px; background: #15171c; color: #5eead4; display: grid; place-items: center; font-size: 1.9rem; }
+    .wb-card h3 { font-weight: 800; }
+</style>
+
+<script>
+(function () {
+    var KEY = '@helpKey', USER = '@helpUser', CAN_EDIT = @(canEditEntry ? "true" : "false");
+    var $ = function (s) { return document.querySelector(s); };
+
+    // ---- what to say on each screen (plain words) -------------------------------------------------
+    var GETTING = [
+        { sel: '#sidebar nav', title: 'This is the menu', text: 'Click any name here to open that screen. The screen you are on is shown in green.' },
+        { sel: '.menu-btn', title: 'Hide or show the menu', text: 'Press this button to make the menu smaller or bigger. On a phone it opens the menu.' },
+        { sel: '.user-chip', title: 'Your name', text: 'Click your name to change your password or to sign out when you finish.' },
+        { sel: '#helpBtn', title: 'Help is always here', text: 'Stuck on any screen? Press Help. It explains that screen step by step.' }
+    ];
+    var H = {
+        home: {
+            title: 'Dashboard',
+            what: 'The Dashboard shows how many people each factory has compared with what it needs. Nothing to type here - it is only for looking.',
+            steps: ['Choose what to look at: <b>Day</b> (one day), <b>Date range</b>, <b>Month</b> or <b>Year</b>.', 'Pick the date, month or year.', 'Click factory names to show or hide them. Press <b>All</b> to show every factory.', 'Press <b>Apply</b>.', 'Read the six boxes at the top: how full the budget is, budget, allocated, present, short and absent.', 'Look at the colour map. <b>Red and orange</b> boxes need people the most.'],
+            tip: 'Press <b>Excel</b> to download, or <b>Print / PDF</b> to print or save as PDF.',
+            tour: [
+                { sel: '#modeSeg', title: '1. Choose the period', text: 'Day, Date range, Month or Year. Start with <b>Day</b>.' },
+                { sel: '#filters input[type=date], #filters input[type=month], #filters select', title: '2. Pick the date', text: 'Choose the day (or month / year) you want to see.' },
+                { sel: '.fchip', title: '3. Choose factories', text: 'Click a factory name to show or hide it. Press <b>All</b> to show every factory.' },
+                { sel: '#filters .btn-primary, #filters button[type=submit]', title: '4. Press Apply', text: 'This shows your choice. <b>Excel</b> and <b>Print</b> are next to it.' },
+                { sel: '.strip', title: '5. The six boxes', text: 'A quick summary of all factories together. The small arrows show the change since before.' },
+                { sel: '.score', title: '6. Factory comparison', text: 'Each factory has its own column, so you can compare them side by side.' },
+                { sel: '.heat', title: '7. The colour map', text: 'Green is good. <b>Red / orange = many people missing</b>. Look at these first.' }
+            ]
+        },
+        entry: {
+            title: 'Daily Entry',
+            what: 'Here you type how many people were <b>allocated</b> and how many were <b>absent</b> in each section, for one factory and one day.',
+            steps: ['Choose the <b>date</b> (top right).', 'Choose your <b>factory</b>. The sections appear.', 'In each row type <b>Allocated</b> (people assigned) and <b>Absent</b> (people who did not come). Use the <b>Tab</b> key to jump to the next box.', 'Check the <b>Budget</b> number. It is filled in for you. Change it only if today is different.', '<b>Present</b> and <b>Shortage</b> work themselves out. A red minus number means you are short of people.', 'Press <b>Save entries</b> at the bottom. Wait for the green &ldquo;Saved&rdquo; message.'],
+            tip: 'Absent can never be more than Allocated. If you see an error, check those two numbers. If you leave without pressing Save, your typing is lost.',
+            tour: [
+                { sel: 'input[name=date]', title: '1. Choose the date', text: 'Pick the day you are entering numbers for.' },
+                { sel: 'select[name=factoryId]', title: '2. Choose your factory', text: 'Pick the factory. All its sections will appear below.' },
+                { sel: '.entry-t tbody tr[data-row]', title: '3. Type the numbers', text: 'In each row type <b>Allocated</b> (people assigned) and <b>Absent</b>. <b>Present</b> and <b>Shortage</b> appear by themselves.' },
+                { sel: '.entry-t tfoot', title: '4. Check the total', text: 'This row adds up everything for the factory.' },
+                { sel: '.save-bar', title: '5. Save', text: 'Press <b>Save entries</b>. Nothing is kept until you save.' }
+            ]
+        },
+        import: {
+            title: 'Import from Excel',
+            what: 'Load many days at once from your Excel workbook instead of typing them.',
+            steps: ['Press <b>Choose File</b> and pick your .xlsx workbook.', 'Press <b>Import</b>.', 'Read the result. Anything under <b>Needs attention</b> could not be matched - fix the name and import again.'],
+            tip: 'Each sheet needs its date in cell <b>B3</b>. Days that already exist are <b>replaced</b> by the Excel numbers.',
+            tour: [{ sel: 'input[type=file]', title: 'Choose your file', text: 'Pick the Excel workbook (.xlsx) from your computer.' }, { sel: 'form button.btn-primary', title: 'Import', text: 'Press this to load it. A summary shows what was loaded.' }]
+        },
+        report: {
+            title: 'Report',
+            what: 'One big table for one day: every factory, department and section with totals. Same layout as the old Excel sheet.',
+            steps: ['Pick the <b>date</b> at the top.', 'Read across: each factory has BUD (budget), ALLOC (allocated), AB (absent), PRES (present) and SHORT.', '<b>Sub Total</b> rows add up one department. <b>Grand Total</b> adds the main departments.', 'Press <b>Download Excel</b> to save it, or print the page.'],
+            tip: 'A red minus number in SHORT means short of people. On a phone, swipe sideways to see all factories.',
+            tour: [
+                { sel: '.page-head input[type=date]', title: '1. Pick the date', text: 'The report shows this one day.' },
+                { sel: '.page-head a.btn, .page-head .btn-outline-secondary', title: '2. Download', text: 'Saves this same table as an Excel file.' },
+                { sel: '.rep-card', title: '3. The table', text: 'Each factory has its own block. Scroll sideways if it does not all fit.' }
+            ]
+        },
+        factories: master('Factories', 'The list of factories. Everything else (budgets, entries) belongs to a factory.'),
+        departments: master('Departments', 'Groups of sections, such as Sewing Lines or Pre Production. Switch on <b>separate total</b> for a department that should be counted on its own.'),
+        sections: master('Sections', 'The lines and units inside a department, like LINE 01. Choose the department when you add one.'),
+        budgets: {
+            title: 'Budget Master',
+            what: 'The approved number of people for each section in each factory. This is the starting number you see in Daily Entry.',
+            steps: ['Use <b>search</b> or the factory list to find the row.', 'Press the <b>pencil</b> to change a budget.', 'Set <b>Applies from</b>. The new budget counts from that date; earlier days keep the old one.', 'Press <b>Save</b>. Press <b>New budget</b> to add a section that has none.'],
+            tip: 'You can see the old budgets with their dates at the bottom of the edit page.',
+            tour: [
+                { sel: '.page-head select', title: '1. Choose a factory', text: 'Show only one factory&rsquo;s budgets.' },
+                { sel: '.tsearch input', title: '2. Search', text: 'Type part of a name to find a row quickly.' },
+                { sel: 'table.js-filter td.text-end .btn-icon', title: '3. Change a budget', text: 'The pencil opens the row. Choose the date it should apply from.' },
+                { sel: '.page-head .btn-primary', title: '4. Add a new one', text: 'Use this to add a budget for a section that has none.' }
+            ]
+        },
+        users: {
+            title: 'Users &amp; Access',
+            what: 'Create a login for each person and choose what they may open. For administrators only.',
+            steps: ['Press <b>New user</b>.', 'Type the <b>name</b>, a <b>username</b> and a <b>password</b>.', 'Choose the <b>role</b>: Admin (everything), Super User (look only), or User (you choose screens).', 'For a User, tick <b>View</b> or <b>Edit</b> for each screen.', 'To limit a person to some factories, switch off <b>All factories</b> and pick them.', 'Press <b>Save user</b>. To reset a forgotten password, edit the person and type a new one.'],
+            tip: 'To stop someone using the system, edit them and switch off <b>Account active</b>.',
+            tour: [{ sel: '.page-head .btn-primary', title: 'Add a person', text: 'Press <b>New user</b> to create a login.' }, { sel: 'table', title: 'People list', text: 'Use the pencil to change a person, their password or what they can open.' }]
+        },
+        audit: {
+            title: 'Activity Log',
+            what: 'A record of who signed in, who changed what, and when. You can only look - nothing can be edited here.',
+            steps: ['Use the filters (date, person, action) and press <b>Apply</b>.', 'Click a row with a small arrow to see <b>Before</b> and <b>After</b> values.', 'Press <b>Download Excel</b> to save the list.'],
+            tip: 'Quick links such as <b>Failed sign-ins</b> and <b>Deletions</b> help you find problems fast.',
+            tour: [{ sel: '.alog-filters', title: 'Filters', text: 'Narrow the list by date, person or action.' }, { sel: '.alog', title: 'The list', text: 'Newest first. Click a row with an arrow to see what changed.' }]
+        },
+        account: {
+            title: 'Your account',
+            what: 'Change your own password here.',
+            steps: ['Type your <b>current</b> password.', 'Type the <b>new</b> password two times (at least 8 characters, with upper-case, lower-case and a number).', 'Press the button to save.'],
+            tip: 'Never share your password with anyone.',
+            tour: []
+        },
+        guide: {
+            title: 'User Guide',
+            what: 'The full guide with pictures. You can also watch videos.',
+            steps: ['Read the guide on this page.', 'Press <b>Download PDF</b> to keep a copy, <b>Print</b> to print it, or <b>Share</b> to send it to someone.', 'Click <b>Videos</b> to watch short training videos.'],
+            tip: '', tour: []
+        }
+    };
+    function master(name, what) {
+        return {
+            title: name, what: what,
+            steps: ['Use the <b>search</b> box to find a row.', 'Press <b>New</b> to add one.', 'Press the <b>pencil</b> to change a row, or the <b>bin</b> to delete it.', 'Press <b>Save</b>.'],
+            tip: 'A row that is already used in daily entries cannot be deleted. This protects your history.',
+            tour: [
+                { sel: '.tsearch input', title: 'Search', text: 'Type part of a name to find a row.' },
+                { sel: '.page-head .btn-primary', title: 'Add new', text: 'Press this to add a new row.' },
+                { sel: 'table.js-filter td.text-end .btn-icon', title: 'Change or delete', text: 'The pencil changes the row. The bin deletes it (you will be asked to confirm).' }
+            ]
+        };
+    }
+
+    // ---- side panel ------------------------------------------------------------------------------
+    var panel = $('#hp-panel'), overlay = $('#hp-overlay');
+    function cur() { return H[KEY] || { title: 'This screen', what: 'Use the menu on the left to open a screen. Press <b>Welcome tour</b> below for a quick walk-through.', steps: [], tip: '', tour: [] }; }
+    function openPanel() {
+        var c = cur();
+        $('#hp-title').innerHTML = c.title;
+        var h = '<div class="hp-what">' + c.what + '</div>';
+        if (c.steps.length) h += '<h6>How to do it</h6><ol>' + c.steps.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>';
+        if (c.tip) h += '<div class="hp-tip"><b>Good to know:</b> ' + c.tip + '</div>';
+        $('#hp-body').innerHTML = h;
+        $('#hp-show').style.display = (c.tour && c.tour.length) ? '' : 'none';
+        panel.classList.add('open'); panel.setAttribute('aria-hidden', 'false'); overlay.hidden = false;
+        $('#helpBtn').classList.remove('pulse'); try { localStorage.setItem('cmsHelpSeen', '1'); } catch (e) { }
+    }
+    function closePanel() { panel.classList.remove('open'); panel.setAttribute('aria-hidden', 'true'); overlay.hidden = true; }
+    $('#helpBtn')?.addEventListener('click', openPanel);
+    $('#hp-close').addEventListener('click', closePanel);
+    overlay.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closePanel(); endTour(); $('#hp-welcome-box').hidden = true; } });
+    try { if (!localStorage.getItem('cmsHelpSeen')) $('#helpBtn')?.classList.add('pulse'); } catch (e) { }
+
+    // ---- spotlight tour --------------------------------------------------------------------------
+    var ring = $('#sp-ring'), card = $('#sp-card'), steps = [], idx = 0;
+    function vis(el) { var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+    function find(sel) { var all = document.querySelectorAll(sel); for (var i = 0; i < all.length; i++) if (vis(all[i])) return all[i]; return null; }
+    function startTour(list) {
+        closePanel();
+        if (window.innerWidth < 992) $('#sidebar')?.classList.add('open');   // phones: menu must be open to point at it
+        steps = list.map(function (s) { return { el: find(s.sel), title: s.title, text: s.text }; }).filter(function (s) { return s.el; });
+        if (!steps.length) return;
+        idx = 0; show();
+    }
+    function show() {
+        var s = steps[idx];
+        s.el.scrollIntoView({ block: 'center', behavior: 'instant' in window ? 'auto' : 'auto' });
+        setTimeout(place, 60);
+        $('#sp-count').textContent = 'Step ' + (idx + 1) + ' of ' + steps.length;
+        $('#sp-title').innerHTML = s.title; $('#sp-text').innerHTML = s.text;
+        $('#sp-back').style.visibility = idx ? 'visible' : 'hidden';
+        $('#sp-next').textContent = idx === steps.length - 1 ? 'Done' : 'Next';
+        ring.hidden = false; card.hidden = false;
+    }
+    function place() {
+        if (card.hidden) return;
+        var s = steps[idx], r = s.el.getBoundingClientRect(), pad = 6;
+        var top = Math.max(r.top - pad, 4), left = Math.max(r.left - pad, 4);
+        var w = Math.min(r.width + pad * 2, innerWidth - 8), h = Math.min(r.height + pad * 2, innerHeight - 8);
+        Object.assign(ring.style, { top: top + 'px', left: left + 'px', width: w + 'px', height: h + 'px' });
+        var cw = card.offsetWidth, ch = card.offsetHeight, x, y;
+        if (r.bottom + ch + 20 < innerHeight) y = r.bottom + 14;          // below
+        else if (r.top - ch - 20 > 0) y = r.top - ch - 14;                // above
+        else y = Math.max(12, innerHeight - ch - 12);                     // bottom of screen
+        x = Math.min(Math.max(12, r.left), innerWidth - cw - 12);
+        if (r.left > innerWidth * .6 && r.right - cw > 12) x = r.right - cw;
+        if (r.right + cw + 20 < innerWidth && r.height > innerHeight * .7) { x = r.right + 14; y = 80; }   // tall item (menu): card beside it
+        card.style.top = y + 'px'; card.style.left = x + 'px';
+    }
+    function endTour() { ring.hidden = true; card.hidden = true; if (window.innerWidth < 992) $('#sidebar')?.classList.remove('open'); }
+    $('#sp-next').addEventListener('click', function () { if (idx >= steps.length - 1) { endTour(); try { localStorage.setItem('cmsWelcome_' + USER, '1'); } catch (e) { } } else { idx++; show(); } });
+    $('#sp-back').addEventListener('click', function () { if (idx) { idx--; show(); } });
+    $('#sp-skip').addEventListener('click', endTour);
+    addEventListener('resize', place); addEventListener('scroll', place, true);
+
+    $('#hp-show').addEventListener('click', function () { startTour(cur().tour); });
+    $('#hp-welcome').addEventListener('click', function (e) { e.preventDefault(); startTour(GETTING); });
+
+    // ---- welcome (first time on this computer) ---------------------------------------------------
+    var wb = $('#hp-welcome-box');
+    $('#wb-go').addEventListener('click', function () { wb.hidden = true; try { localStorage.setItem('cmsWelcome_' + USER, '1'); } catch (e) { } startTour(GETTING); });
+    $('#wb-later').addEventListener('click', function () { wb.hidden = true; try { localStorage.setItem('cmsWelcome_' + USER, '1'); } catch (e) { } });
+    try { if (!localStorage.getItem('cmsWelcome_' + USER) && KEY !== 'account') setTimeout(function () { wb.hidden = false; }, 700); } catch (e) { }
+})();
+</script>
